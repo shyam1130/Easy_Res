@@ -148,10 +148,10 @@ def create_app(
                         for name, category, price in SEED_MENU
                     ]
                 )
-            admin = db.scalar(
-                select(User).where(User.email == configured_admin_email)
+            has_admin = db.scalar(
+                select(User.id).where(User.role == "admin").limit(1)
             )
-            if admin is None:
+            if has_admin is None:
                 if not configured_admin_email or not configured_admin_password:
                     raise RuntimeError(
                         "Set ADMIN_EMAIL and ADMIN_PASSWORD before first startup; "

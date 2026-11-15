@@ -78,6 +78,27 @@ def test_first_start_uses_environment_credentials(tmp_path, monkeypatch):
         assert response.status_code == 200
 
 
+def test_existing_admin_database_starts_without_bootstrap_credentials(
+    tmp_path, monkeypatch
+):
+    database_url = f"sqlite:///{tmp_path / 'existing-admin.db'}"
+    with TestClient(create_app(
+        database_url,
+        admin_email=ADMIN_EMAIL,
+        admin_password=ADMIN_PASSWORD,
+    )):
+        pass
+
+    monkeypatch.delenv("ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    with TestClient(create_app(database_url)) as client:
+        response = client.post(
+            "/api/auth/login",
+            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+        )
+        assert response.status_code == 200
+
+
 def test_price_snapshot_zero_quantity_and_archive(tmp_path):
     with make_client(tmp_path) as client:
         admin = admin_headers(client)
