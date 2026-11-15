@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#172a3a">
+  <title>Restaurant POS</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="login-mode">
+  <header class="topbar">
+    <div><p class="eyebrow">RESTAURANT POS</p><h1>Table Service</h1></div>
+    <div id="session-controls" class="session-controls hidden">
+      <span id="logged-in-user"></span>
+      <nav id="admin-nav" class="hidden" aria-label="Admin dashboard">
+        <button class="nav-button active" data-admin-section="bills">Table bills</button>
+        <button class="nav-button" data-admin-section="history">Bill History</button>
+        <button class="nav-button" data-admin-section="waiters">Manage waiters</button>
+        <button class="nav-button" data-admin-section="menu">Update menu</button>
+      </nav>
+      <button id="logout" class="button button-outline">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="login-view" class="panel auth-panel">
+      <div class="auth-brand">
+        <span class="auth-brand-mark" aria-hidden="true">R</span>
+        <span>Restaurant Service</span>
+      </div>
+      <p class="eyebrow">STAFF ACCESS</p>
+      <h2>Welcome back</h2>
+      <p class="auth-copy">Sign in to manage tables, orders, and service.</p>
+      <form id="login-form" class="auth-form">
+        <label>Email<input id="login-email" type="email" autocomplete="username" required></label>
+        <label>Password<input id="login-password" type="password" autocomplete="current-password" required></label>
+        <button class="button button-primary">Sign in</button>
+        <p id="login-error" class="error" role="alert"></p>
+      </form>
+    </section>
+
+    <section id="waiter-view" class="hidden">
+      <div class="section-heading">
+        <div><p class="eyebrow">FLOOR</p><h2>Choose a table</h2></div>
+        <span class="legend">Select an empty table to start or an occupied table to add items. <i></i> Empty <i class="occupied-dot"></i> Occupied</span>
+      </div>
+      <div id="tables" class="table-grid" aria-live="polite"></div>
+      <div id="order-workspace" class="order-layout hidden">
+        <section class="panel menu-panel">
+          <div class="section-heading compact">
+            <div><p class="eyebrow">ORDERING</p><h2 id="menu-title">Menu</h2></div>
+          </div>
+          <div class="menu-controls">
+            <input id="menu-search" type="search" placeholder="Search menu" aria-label="Search menu">
+            <select id="category-filter" aria-label="Filter by category"><option value="">All categories</option></select>
+          </div>
+          <div id="menu-items" class="menu-grid"></div>
+        </section>
+        <section class="panel bill-panel">
+          <div class="section-heading compact">
+            <div><p class="eyebrow">CURRENT BILL</p><h2 id="bill-title">Table</h2></div>
+            <span id="bill-status" class="pill">EMPTY</span>
+          </div>
+          <div id="bill-lines" class="bill-lines"><p class="muted">No items added yet.</p></div>
+          <label class="vat-toggle"><input type="checkbox" id="vat-toggle"> Add 13% VAT</label>
+          <div class="totals">
+            <div><span>Subtotal</span><strong id="subtotal">Rs. 0.00</strong></div>
+            <div><span>VAT</span><strong id="vat-amount">Rs. 0.00</strong></div>
+            <div class="grand-total"><span>Total payable</span><strong id="total">Rs. 0.00</strong></div>
+          </div>
+          <div class="bill-actions">
+            <button id="add-items" class="button button-primary" disabled>Add items to bill</button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="admin-view" class="hidden">
+        <section id="admin-bills-section" class="panel admin-bills-panel">
+          <div class="section-heading compact">
+            <div><p class="eyebrow">FLOOR OVERVIEW</p><h2>Table bills</h2></div>
+            <span class="muted">Select any table to view its current bill.</span>
+          </div>
+          <div class="admin-bills-layout">
+            <div id="admin-tables" class="table-grid" aria-label="Select a table to view its bill"></div>
+            <section class="admin-bill panel" aria-live="polite">
+              <div class="section-heading compact">
+                <div><p class="eyebrow">CURRENT BILL</p><h2 id="admin-bill-title">Select a table</h2></div>
+                <span id="admin-bill-status" class="pill">—</span>
+              </div>
+              <div id="admin-bill-lines" class="bill-lines"><p class="muted">Choose a table to view its bill.</p></div>
+              <div class="totals">
+                <div><span>Subtotal</span><strong id="admin-subtotal">Rs. 0.00</strong></div>
+                <div><span>VAT</span><strong id="admin-vat">Rs. 0.00</strong></div>
+                <div class="grand-total"><span>Total payable</span><strong id="admin-total">Rs. 0.00</strong></div>
+              </div>
+              <div class="bill-actions">
+                <button id="admin-settle" class="button button-dark" disabled>Settle &amp; close table</button>
+              </div>
+              <section class="table-history">
+                <h3>Settled bill history</h3>
+                <div id="admin-history"><p class="muted">Select a table to view its history.</p></div>
+              </section>
+            </section>
+          </div>
+        </section>
+        <section id="admin-history-section" class="panel admin-history-section hidden">
+          <div class="section-heading compact">
+            <div><p class="eyebrow">SETTLED ORDERS</p><h2>Bill History</h2></div>
+            <span class="muted">Settled bills from all tables.</span>
+          </div>
+          <div class="menu-controls history-controls">
+            <input id="history-search" type="search" placeholder="Search bill number or table" aria-label="Search settled bills">
+          </div>
+          <div id="all-bill-history"><p class="muted">Loading settled bills...</p></div>
+        </section>
+        <section id="admin-waiters-section" class="panel admin-form-panel hidden">
+          <div class="section-heading compact"><div><p class="eyebrow">STAFF ACCESS</p><h2 id="waiter-form-title">Add waiter</h2></div></div>
+          <form id="waiter-form" class="menu-form">
+            <input id="waiter-id" type="hidden">
+            <label>Email<input id="waiter-email" type="email" autocomplete="off" required></label>
+            <label>Password<input id="waiter-password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label>
+            <label class="checkbox-label"><input id="waiter-active" type="checkbox" checked> Active</label>
+            <div class="form-actions"><button id="waiter-save" class="button button-primary">Add waiter</button><button type="button" id="cancel-waiter-edit" class="button button-outline hidden">Cancel edit</button></div>
+          </form>
+          <section class="admin-list-panel"><h2>Waiter accounts</h2><div id="waiter-list"></div></section>
+        </section>
+        <section id="admin-menu-section" class="hidden">
+          <section class="panel admin-form-panel">
+          <div class="section-heading compact"><div><p class="eyebrow">MENU</p><h2 id="admin-form-title">Add menu item</h2></div></div>
+          <form id="menu-form" class="menu-form">
+            <input type="hidden" id="menu-id">
+            <label>Name<input id="item-name" maxlength="120" required></label>
+            <label>Category<input id="item-category" maxlength="80" placeholder="Momo, Noodles, Beverages" required></label>
+            <label>Price (NPR)<input id="item-price" type="number" min="0" step="0.01" required></label>
+            <label class="checkbox-label"><input id="item-available" type="checkbox" checked> In stock</label>
+            <div class="form-actions"><button class="button button-primary">Save item</button><button type="button" id="cancel-edit" class="button button-outline hidden">Cancel edit</button></div>
+          </form>
+          </section>
+          <section class="panel admin-list-panel"><h2>Current menu</h2><div id="admin-menu-list"></div></section>
+        </section>
+    </section>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
