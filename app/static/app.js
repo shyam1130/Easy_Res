@@ -9,6 +9,7 @@ const state = {
   menu: [],
   cart: new Map(),
 };
+let settlementConfirmation = null;
 
 const $ = (selector) => document.querySelector(selector);
 const money = (amount) => `Rs. ${Number(amount || 0).toFixed(2)}`;
@@ -172,28 +173,9 @@ async function refreshAdminBill() {
       <div class="bill-line">
         <span class="line-name">${escapeHtml(item.item_name)}</span>
         <span class="line-total">${money(item.line_total)}</span>
-        <span class="line-meta">${money(item.unit_price)} each</span>
-        <div class="line-controls">
-          <button class="qty-button" data-qty="${item.id}" data-next="${Math.max(0, item.quantity - 1)}" aria-label="Decrease ${escapeHtml(item.item_name)} quantity">−</button>
-          <strong>${item.quantity}</strong>
-          <button class="qty-button" data-qty="${item.id}" data-next="${item.quantity + 1}" aria-label="Increase ${escapeHtml(item.item_name)} quantity">+</button>
-        </div>
+        <span class="line-meta">${money(item.unit_price)} each · Qty ${item.quantity}</span>
       </div>`).join("")
     : '<p class="muted">No active bill for this table.</p>';
-  $("#admin-bill-lines").querySelectorAll("[data-qty]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      try {
-        await api(`/api/orders/items/${button.dataset.qty}`, {
-          method: "PATCH",
-          body: JSON.stringify({ quantity: Number(button.dataset.next) }),
-        });
-        await Promise.all([refreshAdminBill(), refreshTables()]);
-        toast("Table bill updated");
-      } catch (error) {
-        toast(error.message);
-      }
-    });
-  });
   $("#admin-subtotal").textContent = money(order?.subtotal);
   $("#admin-vat").textContent = money(order?.vat_amount);
   $("#admin-total").textContent = money(order?.total_amount);
@@ -279,22 +261,48 @@ $("#vat-toggle").addEventListener("change", async (event) => {
   }
 });
 
-$("#admin-settle").addEventListener("click", async () => {
+$("#admin-settle").addEventListener("click", () => {
   const order = state.adminOrder;
-  if (!order || !window.confirm(`Settle Table ${state.adminTable} for ${money(order.total_amount)}?`)) return;
+  if (!order) return;
+  settlementConfirmation = { orderId: order.id, tableNumber: state.adminTable };
+  $("#settle-dialog-message").textContent =
+    `This will close Table ${state.adminTable} and save the bill to history.`;
+  $("#settle-dialog-total").textContent = money(order.total_amount);
+  $("#settle-dialog").showModal();
+});
+
+$("#settle-cancel").addEventListener("click", () => {
+  settlementConfirmation = null;
+  $("#settle-dialog").close();
+});
+
+$("#settle-dialog").addEventListener("cancel", () => {
+  settlementConfirmation = null;
+});
+
+$("#settle-confirm").addEventListener("click", async () => {
+  if (!settlementConfirmation) return;
+  const confirmation = settlementConfirmation;
+  settlementConfirmation = null;
+  $("#settle-dialog").close();
+  $("#settle-confirm").disabled = true;
   try {
-    const closed = await api(`/api/orders/${order.id}/close`, { method: "POST" });
-    if (state.order?.id === order.id) {
+    const closed = await api(`/api/orders/${confirmation.orderId}/close`, { method: "POST" });
+    if (state.order?.id === confirmation.orderId) {
       state.order = null;
       renderOrder();
     }
     await Promise.all([
       refreshTables(),
       refreshAdminBill(),
-      refreshAdminHistory(),
+      refreshAdminHistory(confirmation.tableNumber),
     ]);
     toast(`Bill #${closed.id} settled and archived`);
-  } catch (error) { toast(error.message); }
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    $("#settle-confirm").disabled = false;
+  }
 });
 
 $("#menu-search").addEventListener("input", renderMenu);
@@ -326,8 +334,10 @@ async function showLoggedIn(user) {
   state.user = user;
   $("#login-view").classList.add("hidden");
   $("#session-controls").classList.remove("hidden");
-  $("#logged-in-user").textContent = `${user.email} · ${user.role}`;
   const isAdmin = user.role === "admin";
+  $("#logged-in-user").textContent = isAdmin
+    ? "Admin"
+    : `${user.name || "Waiter"} · Waiter`;
   $("#waiter-view").classList.toggle("hidden", isAdmin);
   $("#admin-view").classList.toggle("hidden", !isAdmin);
   $("#admin-nav").classList.toggle("hidden", !isAdmin);
@@ -393,7 +403,10 @@ async function loadWaiters() {
   const waiters = await api("/api/admin/waiters");
   $("#waiter-list").innerHTML = waiters.length ? waiters.map((waiter) => `
     <div class="admin-row">
-      <div><strong>${escapeHtml(waiter.email)}</strong><small>Waiter account</small></div>
+      <div>
+        <strong>${escapeHtml(waiter.name || "Waiter")}</strong>
+        <small>${escapeHtml(waiter.email)}</small>
+      </div>
       <span class="stock ${waiter.is_active ? "" : "out"}">${waiter.is_active ? "Active" : "Inactive"}</span>
       <div class="row-actions">
         <button class="button button-outline" data-waiter-edit="${waiter.id}">Edit</button>
@@ -407,6 +420,7 @@ async function loadWaiters() {
     button.addEventListener("click", () => {
       const waiter = waiters.find((entry) => entry.id === Number(button.dataset.waiterEdit));
       $("#waiter-id").value = waiter.id;
+      $("#waiter-name").value = waiter.name || "";
       $("#waiter-email").value = waiter.email;
       $("#waiter-password").value = "";
       $("#waiter-password").required = false;
@@ -450,6 +464,7 @@ $("#waiter-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const id = $("#waiter-id").value;
   const payload = {
+    name: $("#waiter-name").value.trim(),
     email: $("#waiter-email").value.trim(),
     is_active: $("#waiter-active").checked,
   };

@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#172a3a">
-  <title>Restaurant POS</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <title>Dahal Food &amp; Cafe</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20261116">
 </head>
 <body class="login-mode">
   <header class="topbar">
-    <div><p class="eyebrow">RESTAURANT POS</p><h1>Table Service</h1></div>
+    <div><p class="eyebrow">DAHAL FOOD &amp; CAFE</p><h1>Table Service</h1></div>
     <div id="session-controls" class="session-controls hidden">
       <span id="logged-in-user"></span>
       <nav id="admin-nav" class="hidden" aria-label="Admin dashboard">
@@ -118,6 +118,7 @@
           <div class="section-heading compact"><div><p class="eyebrow">STAFF ACCESS</p><h2 id="waiter-form-title">Add waiter</h2></div></div>
           <form id="waiter-form" class="menu-form">
             <input id="waiter-id" type="hidden">
+            <label>Name<input id="waiter-name" maxlength="120" autocomplete="name" required></label>
             <label>Email<input id="waiter-email" type="email" autocomplete="off" required></label>
             <label>Password<input id="waiter-password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label>
             <label class="checkbox-label"><input id="waiter-active" type="checkbox" checked> Active</label>
@@ -140,8 +141,21 @@
           <section class="panel admin-list-panel"><h2>Current menu</h2><div id="admin-menu-list"></div></section>
         </section>
     </section>
+    <dialog id="settle-dialog" class="confirm-dialog" aria-labelledby="settle-dialog-title" aria-describedby="settle-dialog-message">
+      <div class="confirm-dialog-content">
+        <span class="confirm-mark" aria-hidden="true">!</span>
+        <p class="eyebrow">CONFIRM SETTLEMENT</p>
+        <h2 id="settle-dialog-title">Settle this bill?</h2>
+        <p id="settle-dialog-message" class="confirm-copy"></p>
+        <div class="confirm-total"><span>Total to settle</span><strong id="settle-dialog-total"></strong></div>
+        <div class="confirm-actions">
+          <button type="button" id="settle-cancel" class="button button-outline">Cancel</button>
+          <button type="button" id="settle-confirm" class="button button-dark">Settle &amp; close</button>
+        </div>
+      </div>
+    </dialog>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </main>
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js?v=20261116" defer></script>
 </body>
 </html>

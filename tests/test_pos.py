@@ -1,7 +1,9 @@
+import sqlite3
+
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import create_app
+from app.main import create_app, hash_password
 
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "test-only-admin-password"
@@ -32,7 +34,11 @@ def waiter_headers(client):
     created = client.post(
         "/api/admin/waiters",
         headers=headers,
-        json={"email": "waiter@example.com", "password": "waiter@123"},
+        json={
+            "name": "Alex Waiter",
+            "email": "waiter@example.com",
+            "password": "waiter@123",
+        },
     )
     assert created.status_code == 201
     response = client.post(
@@ -78,6 +84,24 @@ def test_first_start_uses_environment_credentials(tmp_path, monkeypatch):
         assert response.status_code == 200
 
 
+def test_https_required_when_configured(tmp_path, monkeypatch):
+    monkeypatch.setenv("REQUIRE_HTTPS", "true")
+    app = create_app(
+        f"sqlite:///{tmp_path / 'https-required.db'}",
+        admin_email=ADMIN_EMAIL,
+        admin_password=ADMIN_PASSWORD,
+    )
+
+    with TestClient(app, base_url="http://testserver") as client:
+        response = client.get("/")
+        assert response.status_code == 400
+        assert response.json()["detail"] == "HTTPS is required"
+
+    with TestClient(app, base_url="https://testserver") as client:
+        response = client.get("/")
+        assert response.status_code == 200
+
+
 def test_existing_admin_database_starts_without_bootstrap_credentials(
     tmp_path, monkeypatch
 ):
@@ -99,6 +123,38 @@ def test_existing_admin_database_starts_without_bootstrap_credentials(
         assert response.status_code == 200
 
 
+def test_existing_user_table_is_upgraded_with_display_names(tmp_path):
+    database_url = f"sqlite:///{tmp_path / 'legacy-users.db'}"
+    connection = sqlite3.connect(tmp_path / "legacy-users.db")
+    connection.execute(
+        """
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY,
+            email VARCHAR(254) NOT NULL UNIQUE,
+            password_hash VARCHAR(256) NOT NULL,
+            role VARCHAR(10) NOT NULL,
+            is_active BOOLEAN NOT NULL,
+            created_at DATETIME NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        "INSERT INTO users (email, password_hash, role, is_active, created_at) "
+        "VALUES (?, ?, 'admin', 1, ?)",
+        (ADMIN_EMAIL, hash_password(ADMIN_PASSWORD), "2026-01-01 00:00:00"),
+    )
+    connection.commit()
+    connection.close()
+
+    with TestClient(create_app(database_url)) as client:
+        login = client.post(
+            "/api/auth/login",
+            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+        )
+        assert login.status_code == 200
+        assert login.json()["user"]["name"] == "Admin"
+
+
 def test_price_snapshot_zero_quantity_and_archive(tmp_path):
     with make_client(tmp_path) as client:
         admin = admin_headers(client)
@@ -116,10 +172,16 @@ def test_price_snapshot_zero_quantity_and_archive(tmp_path):
         line = added.json()["items"][0]
         assert line["unit_price"] == original_price
 
-        increased = client.patch(
+        admin_change = client.patch(
             f"/api/orders/items/{line['id']}",
             json={"quantity": 3},
             headers=admin,
+        )
+        assert admin_change.status_code == 403
+        increased = client.patch(
+            f"/api/orders/items/{line['id']}",
+            json={"quantity": 3},
+            headers=waiter,
         )
         assert increased.status_code == 200
         assert increased.json()["items"][0]["quantity"] == 3
@@ -178,6 +240,7 @@ def test_price_snapshot_zero_quantity_and_archive(tmp_path):
 
 def test_table_isolation_vat_and_admin_protection(tmp_path):
     with make_client(tmp_path) as client:
+        admin = admin_headers(client)
         waiter = waiter_headers(client)
         menu_item = client.get("/api/menu", headers=waiter).json()[0]
         assert client.get("/api/admin/menu", headers=waiter).status_code == 403
@@ -187,6 +250,11 @@ def test_table_isolation_vat_and_admin_protection(tmp_path):
             json={"items": [{"menu_item_id": menu_item["id"], "quantity": 1}]},
             headers=waiter,
         ).json()
+        assert client.post(
+            "/api/tables/3/items",
+            json={"items": [{"menu_item_id": menu_item["id"], "quantity": 1}]},
+            headers=admin,
+        ).status_code == 403
         vat_order = client.patch(
             f"/api/orders/{order['id']}/vat",
             json={"enabled": True},
@@ -246,16 +314,25 @@ def test_email_login_roles_and_waiter_account_management(tmp_path):
         waiter_response = client.post(
             "/api/admin/waiters",
             headers=admin,
-            json={"email": "New.Waiter@example.com", "password": "waiter@123"},
+            json={
+                "name": "Jamie Smith",
+                "email": "New.Waiter@example.com",
+                "password": "waiter@123",
+            },
         )
         assert waiter_response.status_code == 201
         waiter = waiter_response.json()
         assert waiter["email"] == "new.waiter@example.com"
+        assert waiter["name"] == "Jamie Smith"
         assert "password_hash" not in waiter
         assert client.post(
             "/api/admin/waiters",
             headers=admin,
-            json={"email": "NEW.WAITER@example.com", "password": "otherpass@123"},
+            json={
+                "name": "Jamie Smith",
+                "email": "NEW.WAITER@example.com",
+                "password": "otherpass@123",
+            },
         ).status_code == 409
 
         login = client.post(
@@ -265,15 +342,18 @@ def test_email_login_roles_and_waiter_account_management(tmp_path):
         assert login.status_code == 200
         waiter_token = {"X-Auth-Token": login.json()["token"]}
         assert login.json()["user"]["role"] == "waiter"
+        assert login.json()["user"]["name"] == "Jamie Smith"
+        assert client.get("/api/auth/me", headers=admin).json()["name"] == "Admin"
         assert client.get("/api/admin/waiters", headers=waiter_token).status_code == 403
         assert client.get("/api/tables", headers=waiter_token).status_code == 200
 
         updated = client.put(
             f"/api/admin/waiters/{waiter['id']}",
             headers=admin,
-            json={"password": "newpass@123"},
+            json={"name": "Jamie S.", "password": "newpass@123"},
         )
         assert updated.status_code == 200
+        assert updated.json()["name"] == "Jamie S."
         assert client.post(
             "/api/auth/login",
             json={"email": "new.waiter@example.com", "password": "waiter@123"},

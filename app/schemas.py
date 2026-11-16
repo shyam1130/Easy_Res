@@ -11,6 +11,9 @@ MenuCategory = Annotated[
 ]
 PositiveQuantity = Annotated[int, Field(gt=0, le=999)]
 Price = Annotated[Decimal, Field(ge=0, max_digits=10, decimal_places=2)]
+DisplayName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)
+]
 
 
 class MenuItemCreate(BaseModel):
@@ -44,6 +47,7 @@ class UserRead(BaseModel):
 
     id: int
     email: EmailStr
+    name: str | None
     role: Literal["admin", "waiter"]
     is_active: bool
     created_at: datetime
@@ -55,11 +59,13 @@ class LoginResponse(BaseModel):
 
 
 class WaiterCreate(BaseModel):
+    name: DisplayName
     email: EmailStr
     password: Annotated[str, StringConstraints(min_length=8, max_length=128)]
 
 
 class WaiterUpdate(BaseModel):
+    name: DisplayName | None = None
     email: EmailStr | None = None
     password: Annotated[str, StringConstraints(min_length=8, max_length=128)] | None = None
     is_active: bool | None = None

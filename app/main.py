@@ -7,9 +7,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -131,10 +131,28 @@ def create_app(
         if admin_password is not None
         else os.getenv("ADMIN_PASSWORD", "")
     )
+    require_https = os.getenv("REQUIRE_HTTPS", "").strip().casefold() in {
+        "1",
+        "true",
+        "yes",
+    }
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         Base.metadata.create_all(engine)
+        user_columns = {column["name"] for column in inspect(engine).get_columns("users")}
+        if "name" not in user_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE users ADD COLUMN name VARCHAR(120)")
+                )
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE users SET name = 'Admin' "
+                    "WHERE role = 'admin' AND name IS NULL"
+                )
+            )
         with session_factory() as db:
             if db.scalar(select(MenuItem.id).limit(1)) is None:
                 db.add_all(
@@ -164,6 +182,7 @@ def create_app(
                 db.add(
                     User(
                         email=configured_admin_email,
+                        name="Admin",
                         password_hash=hash_password(configured_admin_password),
                         role="admin",
                         is_active=True,
@@ -176,6 +195,16 @@ def create_app(
     app = FastAPI(title="Restaurant POS", version="1.0.0", lifespan=lifespan)
     app.state.session_factory = session_factory
     app.state.sessions = {}
+
+    @app.middleware("http")
+    async def enforce_https(request: Request, call_next):
+        if require_https and request.url.scheme != "https":
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "HTTPS is required"},
+            )
+        return await call_next(request)
+
     app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 
     def db_dependency():
@@ -211,7 +240,6 @@ def create_app(
     admin_only = require_roles("admin")
     waiter_only = require_roles("waiter")
     authenticated = require_roles("admin", "waiter")
-    order_editor = require_roles("admin", "waiter")
 
     def validate_table_number(table_number: int) -> None:
         if table_number < 1 or table_number > 15:
@@ -358,6 +386,7 @@ def create_app(
             raise HTTPException(status_code=409, detail="Email is already registered")
         waiter = User(
             email=email,
+            name=payload.name,
             password_hash=hash_password(payload.password),
             role="waiter",
             is_active=True,
@@ -389,6 +418,10 @@ def create_app(
         updates = payload.model_dump(exclude_unset=True)
         if not updates:
             raise HTTPException(status_code=422, detail="No waiter changes provided")
+        if "name" in updates:
+            if updates["name"] is None:
+                raise HTTPException(status_code=422, detail="Name cannot be empty")
+            waiter.name = updates["name"]
         if "email" in updates:
             if updates["email"] is None:
                 raise HTTPException(status_code=422, detail="Email cannot be empty")
@@ -537,7 +570,7 @@ def create_app(
     @app.patch(
         "/api/orders/items/{item_id}",
         response_model=OrderRead,
-        dependencies=[Depends(order_editor)],
+        dependencies=[Depends(waiter_only)],
     )
     def change_order_quantity(
         item_id: int,

@@ -1,0 +1,23 @@
+[Unit]
+Description=Dahal Food & Cafe POS
+After=network.target
+
+[Service]
+Type=simple
+User=restaurant-pos
+Group=restaurant-pos
+WorkingDirectory=/opt/easy-res
+EnvironmentFile=/etc/easy-res/restaurant.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/easy-res/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/easy-res
+
+[Install]
+WantedBy=multi-user.target

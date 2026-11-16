@@ -189,6 +189,43 @@ main { max-width: 1280px; margin: auto; padding: 30px 24px 64px; }
 .button-primary:hover:not(:disabled) { background: var(--accent-dark); }
 .button-dark { background: var(--navy); color: white; }
 .button-outline { border-color: #d4dcd8; background: white; color: #34434c; }
+.confirm-dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  color: var(--ink);
+  background: var(--panel);
+  box-shadow: 0 24px 80px #06141f66;
+}
+.confirm-dialog::backdrop { background: #0b1822a6; backdrop-filter: blur(3px); }
+.confirm-dialog-content { padding: 28px; }
+.confirm-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 20px;
+  border-radius: 14px;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  font-size: 1.25rem;
+  font-weight: 850;
+}
+.confirm-dialog h2 { margin: 0; font-size: 1.45rem; }
+.confirm-copy { margin: 9px 0 19px; color: var(--muted); line-height: 1.5; }
+.confirm-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+.confirm-total strong { color: var(--ink); }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 6px 10px; color: #216747; background: #e6f4eb; font-size: .72rem; font-weight: 850; letter-spacing: .04em; }
 .pill.occupied { color: #8d541e; background: #fff1dc; }
 
